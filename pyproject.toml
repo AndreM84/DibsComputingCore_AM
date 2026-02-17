@@ -29,9 +29,9 @@ addopts = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/AndreM84/DibsComputingCore/tree/main"
-Documentation = "https://github.com/AndreM84/DibsComputingCore/blob/main/src/DibsDocumentation.pdf"
-Repository = "https://github.com/AndreM84/DibsComputingCore"
+Homepage = "https://github.com/AndreM84/DibsComputingCore_AM/tree/main"
+Documentation = "https://github.com/AndreM84/DibsComputingCore_AM/blob/main/src/DibsDocumentation.pdf"
+Repository = "https://github.com/AndreM84/DibsComputingCore_AM"
 
 [tool.black]
 line-length = 88
