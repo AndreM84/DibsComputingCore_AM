@@ -10,6 +10,8 @@ from dibs_computing_core.iso_simulator.model.building import Building
 import time
 import multiprocessing
 from typing import List
+import logging
+logger = logging.getLogger(__name__)
 
 from .dibs_utils.dibs_auxiliary_functions import extracted_method_to_simulate_one_building, unpack_results
 
@@ -153,5 +155,138 @@ class DIBS:
             result, result_output = unpack_results(results)
 
             summary_results = [SummaryResult(result, user_args) for result in result_output]
+
+        return simulation_time, result, summary_results
+
+
+    def safe_calculate_result_of_all_buildings(self, user_buildings: list[Building], index: int) -> dict:
+        """
+        Simulate one building
+        Parameters
+        user_buildings:
+            index: index of the building
+
+        Returns
+            (result, result_output)
+
+        Safe wrapper for calculate_result_of_all_buildings.
+        Ensures multiprocessing does not break on exceptions.
+        Returns a structured dict with success/failure info.
+        """
+        building = user_buildings[index]
+        try:
+            user_args = self.get_user_args()
+
+            self.datasource.building = user_buildings[index]
+            self.datasource.get_epw_file()
+
+            simulator = BuildingSimulator(self.datasource)
+
+            t_set_heating_temp = user_buildings[index].t_set_heating
+
+            result, result_output = extracted_method_to_simulate_one_building(
+                simulator, t_set_heating_temp
+            )
+
+            return {"ok": True, "index": index, "id": id, "result": result,"result_output": result_output}
+        except Exception as e:
+            logger.error(f"Error in building ID={building.id} at index={index}: {e}", exc_info=True)
+            return {"ok": False, "index": index, "id": building.id, "error": str(e)}
+
+    def safe_multi(self) -> tuple[float, Result: List[Result], List[SummaryResult]]:
+        """
+        Simulates all buildings parallel using multiprocessing.Pool()
+        Parameters
+
+        Returns
+            (simulation_time, results_all_hours, summary_results)
+        """
+        user_args = self.get_user_args()
+        self.datasource.get_user_buildings()
+        self.datasource.get_epw_pe_factors()
+
+        with multiprocessing.Pool() as pool:
+            async_results  = []
+            begin = time.time()
+
+            for index, building in enumerate(self.datasource.buildings):
+                result = pool.apply_async(
+                    self.safe_calculate_result_of_all_buildings,
+                    (self.datasource.buildings, index)
+                )
+                async_results .append(result)
+
+            pool.close()
+            pool.join()
+
+            raw_results = [r.get() for r in async_results]
+            end = time.time()
+            simulation_time = end - begin
+
+        # Separate successful and failed results
+        successful = [r for r in raw_results if r["ok"]]
+        failed = [r for r in raw_results if not r["ok"]]
+
+        # Log failed IDs
+        failed_ids = [r["id"] for r in failed]
+        if failed_ids: logger.warning(f"Failed building IDs: {failed_ids}")
+
+        # Extract only successful results for further processing
+        results = [r["result"] for r in successful]
+        result_outputs = [r["result_output"] for r in successful]
+
+        # Continue with your existing logic
+        result, result_output = unpack_results(list(zip(results, result_outputs)))
+
+        summary_results = [SummaryResult(result, user_args) for result in result_output]
+
+        return simulation_time, result, summary_results
+
+    def safe_multi_with_batches(self, user_args, buildings, start, end, batch_results) -> tuple[float, Result: List[Result],
+                                                                                     List[SummaryResult]]:
+        """
+        Simulates all buildings parallel using multiprocessing.Pool()
+        Parameters
+
+        Returns
+            (simulation_time, results_all_hours, summary_results)
+        """
+
+        results = []
+        begin = time.time()
+        print(f'Gebäude von {start} bis {end} wird berechnet')
+        with multiprocessing.Pool() as pool:
+            async_results = []
+
+            for index in range(start, end):
+                result = pool.apply_async(
+                    self.safe_calculate_result_of_all_buildings,
+                    (buildings, index)
+                )
+                async_results.append(result)
+
+            pool.close()
+            pool.join()
+
+            raw_results = [r.get() for r in async_results]
+
+
+        end = time.time()
+        simulation_time = end - begin
+
+        # Separate successful and failed results
+        successful = [r for r in raw_results if r["ok"]]
+        failed = [r for r in raw_results if not r["ok"]]
+
+        failed_ids = [r["id"] for r in failed]
+        if failed_ids: logger.warning(f"Failed building IDs: {failed_ids}")
+
+        # Extract successful results
+        results = [r["result"] for r in successful]
+        result_outputs = [r["result_output"] for r in successful]
+
+        result, result_output = unpack_results(list(zip(results, result_outputs)))
+
+        summary_results = [SummaryResult(result, user_args) for result in result_output]
 
         return simulation_time, result, summary_results
