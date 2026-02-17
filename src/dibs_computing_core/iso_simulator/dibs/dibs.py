@@ -190,8 +190,8 @@ class DIBS:
 
             return {"ok": True, "index": index, "id": id, "result": result,"result_output": result_output}
         except Exception as e:
-            logger.error(f"Error in building ID={building.id} at index={index}: {e}", exc_info=True)
-            return {"ok": False, "index": index, "id": building.id, "error": str(e)}
+            logger.error(f"Error in building ID={building.scr_gebaeude_id} at index={index}: {e}", exc_info=True)
+            return {"ok": False, "index": index, "id": building.scr_gebaeude_id, "error": str(e)}
 
     def safe_multi(self) -> tuple[float, Result: List[Result], List[SummaryResult]]:
         """
